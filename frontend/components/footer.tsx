@@ -39,8 +39,8 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/patent-protection" className="text-muted-foreground hover:text-primary transition-colors">
-                  Patent Protection
+                <Link href="/my-patents" className="text-muted-foreground hover:text-primary transition-colors">
+                  My Patents
                 </Link>
               </li>
               <li>

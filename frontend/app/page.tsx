@@ -162,7 +162,7 @@ export default function HomePage() {
               </CardHeader>
               <CardContent>
                 <Button variant="outline" className="w-full bg-transparent" asChild>
-                  <Link href="/patent-protection">Verify Documents</Link>
+                  <Link href="/my-patents">Verify Documents</Link>
                 </Button>
               </CardContent>
             </Card>

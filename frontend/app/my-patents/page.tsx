@@ -100,6 +100,12 @@ export default function MyPatentsPage() {
   const [isUploadingToIPFS, setIsUploadingToIPFS] = useState(false)
   const [ipfsUploadResult, setIpfsUploadResult] = useState<IPFSUploadResult | null>(null)
 
+  // ============ Protect Document State ============
+  const [protectionFile, setProtectionFile] = useState<File | null>(null)
+  const [isHashingProtection, setIsHashingProtection] = useState(false)
+  const [isSubmittingProtection, setIsSubmittingProtection] = useState(false)
+  const [protectionProof, setProtectionProof] = useState<DocumentProof | null>(null)
+
   // ============ Verify Document State ============
   const [verifyFile, setVerifyFile] = useState<File | null>(null)
   const [isVerifying, setIsVerifying] = useState(false)
@@ -415,6 +421,99 @@ export default function MyPatentsPage() {
     }
   }
 
+  // ============ Protect Document Functions ============
+  const handleProtectionFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      setProtectionFile(file)
+      setProtectionProof(null)
+    }
+  }, [])
+
+  const generateProtectionHash = async () => {
+    if (!protectionFile) {
+      toast({
+        title: "No File Selected",
+        description: "Please select a document to protect.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsHashingProtection(true)
+    try {
+      const arrayBuffer = await protectionFile.arrayBuffer()
+      const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer)
+      const hashArray = Array.from(new Uint8Array(hashBuffer))
+      const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
+
+      setProtectionProof({
+        fileName: protectionFile.name,
+        fileSize: protectionFile.size,
+        fileHash: hashHex,
+        timestamp: new Date().toISOString(),
+        status: "pending",
+      })
+
+      toast({
+        title: "Hash Generated",
+        description: "Your document fingerprint is ready for blockchain protection.",
+      })
+    } catch (error) {
+      console.error("Error generating protection hash:", error)
+      toast({
+        title: "Hash Generation Failed",
+        description: "Failed to generate document hash. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsHashingProtection(false)
+    }
+  }
+
+  const submitProtectionToBlockchain = async () => {
+    if (!protectionProof || !walletConnected) {
+      toast({
+        title: "Requirements Not Met",
+        description: "Connect your wallet and generate a hash first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmittingProtection(true)
+    try {
+      const contractAddress = getContractAddress()
+      const result = await registerDocument(protectionProof.fileHash, protectionProof.fileName, contractAddress)
+
+      setProtectionProof((prev) =>
+        prev
+          ? {
+              ...prev,
+              transactionHash: result.txHash,
+              blockNumber: result.blockNumber,
+              status: "confirmed",
+            }
+          : null,
+      )
+
+      toast({
+        title: "Patent Protected",
+        description: `Transaction: ${result.txHash.slice(0, 10)}...`,
+      })
+    } catch (error) {
+      console.error("Error registering document:", error)
+      setProtectionProof((prev) => (prev ? { ...prev, status: "failed" } : null))
+      toast({
+        title: "Protection Failed",
+        description: error instanceof Error ? error.message : "Failed to register the document hash",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmittingProtection(false)
+    }
+  }
+
   // ============ Verify Document Functions ============
   const handleVerifyFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -600,8 +699,7 @@ export default function MyPatentsPage() {
             My Patents
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Manage your patent portfolio. Register new patents as NFTs, view your collection, 
-            and verify document authenticity.
+            Protect your documents on-chain, mint patent NFTs, manage your collection, and verify authenticity in one place.
           </p>
         </div>
       </section>
@@ -651,7 +749,7 @@ export default function MyPatentsPage() {
 
           {/* Tabs */}
           <Tabs defaultValue="gallery" className="space-y-8">
-            <TabsList className="grid w-full grid-cols-3 lg:w-[500px] mx-auto">
+            <TabsList className="grid w-full grid-cols-4 lg:w-[680px] mx-auto">
               <TabsTrigger value="gallery" className="flex items-center gap-2">
                 <LayoutGrid className="h-4 w-4" />
                 My NFTs
@@ -659,6 +757,10 @@ export default function MyPatentsPage() {
               <TabsTrigger value="register" className="flex items-center gap-2">
                 <Plus className="h-4 w-4" />
                 Register
+              </TabsTrigger>
+              <TabsTrigger value="protect" className="flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Protect
               </TabsTrigger>
               <TabsTrigger value="verify" className="flex items-center gap-2">
                 <Search className="h-4 w-4" />
@@ -745,12 +847,12 @@ export default function MyPatentsPage() {
                             View File
                           </Button>
                           <Button 
-                            variant={copiedText === nft.patent.documentHash ? "default" : "outline"} 
+                            variant={copiedText === nft.patent.patentHash ? "default" : "outline"} 
                             size="sm" 
                             className="flex-1 transition-all"
-                            onClick={() => copyToClipboard(nft.patent.documentHash, "Hash")}
+                            onClick={() => copyToClipboard(nft.patent.patentHash, "Hash")}
                           >
-                            {copiedText === nft.patent.documentHash ? (
+                            {copiedText === nft.patent.patentHash ? (
                               <CheckCircle className="h-3 w-3 mr-1" />
                             ) : (
                               <Copy className="h-3 w-3 mr-1" />
@@ -922,7 +1024,150 @@ export default function MyPatentsPage() {
               </div>
             </TabsContent>
 
-            {/* Tab 3: Verify Document */}
+            {/* Tab 3: Protect Document */}
+            <TabsContent value="protect" className="space-y-6">
+              <div className="max-w-3xl mx-auto">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-primary" />
+                      Protect Patent Document
+                    </CardTitle>
+                    <CardDescription>
+                      Generate a SHA-256 hash and register it on the blockchain for immutable proof of existence.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="protect-file">Select Patent Document</Label>
+                      <Input
+                        id="protect-file"
+                        type="file"
+                        onChange={handleProtectionFileUpload}
+                        accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                        className="bg-background"
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Supported formats: PDF, DOC, DOCX, TXT, PNG, JPG, JPEG
+                      </p>
+                    </div>
+
+                    {protectionFile && (
+                      <div className="p-4 bg-muted rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-5 w-5 text-primary" />
+                          <div className="flex-1">
+                            <p className="font-medium">{protectionFile.name}</p>
+                            <p className="text-sm text-muted-foreground">{formatFileSize(protectionFile.size)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <Button onClick={generateProtectionHash} disabled={!protectionFile || isHashingProtection}>
+                        {isHashingProtection ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Generating Hash...
+                          </>
+                        ) : (
+                          <>
+                            <Hash className="mr-2 h-4 w-4" />
+                            Generate Hash
+                          </>
+                        )}
+                      </Button>
+
+                      <Button
+                        onClick={submitProtectionToBlockchain}
+                        disabled={!walletConnected || !protectionProof || protectionProof.status !== "pending" || isSubmittingProtection}
+                        variant="secondary"
+                      >
+                        {isSubmittingProtection ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Submitting...
+                          </>
+                        ) : (
+                          <>
+                            <LinkIcon className="mr-2 h-4 w-4" />
+                            Submit to Blockchain
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    {!walletConnected && (
+                      <Alert>
+                        <Wallet className="h-4 w-4" />
+                        <AlertDescription>Connect your wallet from the banner above before submitting on-chain.</AlertDescription>
+                      </Alert>
+                    )}
+
+                    {protectionProof && (
+                      <div className="space-y-4">
+                        <Separator />
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <Label className="text-muted-foreground">File Name</Label>
+                              <p>{protectionProof.fileName}</p>
+                            </div>
+                            <div>
+                              <Label className="text-muted-foreground">Status</Label>
+                              <div className="flex items-center gap-2 mt-1">
+                                {protectionProof.status === "pending" && <Clock className="h-4 w-4 text-yellow-500" />}
+                                {protectionProof.status === "confirmed" && <CheckCircle className="h-4 w-4 text-green-500" />}
+                                {protectionProof.status === "failed" && <AlertCircle className="h-4 w-4 text-destructive" />}
+                                <Badge variant={protectionProof.status === "confirmed" ? "default" : "secondary"}>
+                                  {protectionProof.status.charAt(0).toUpperCase() + protectionProof.status.slice(1)}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <Label className="text-xs">SHA-256 Hash</Label>
+                            <div className="flex items-center gap-2 mt-1">
+                              <code className="flex-1 bg-background p-2 rounded text-xs break-all">
+                                {protectionProof.fileHash}
+                              </code>
+                              <Button size="icon" variant="outline" onClick={() => copyToClipboard(protectionProof.fileHash, "Hash")}>
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {protectionProof.transactionHash && (
+                            <div>
+                              <Label className="text-xs">Transaction Hash</Label>
+                              <div className="flex items-center gap-2 mt-1">
+                                <code className="flex-1 bg-background p-2 rounded text-xs break-all">
+                                  {protectionProof.transactionHash}
+                                </code>
+                                <Button size="icon" variant="outline" onClick={() => copyToClipboard(protectionProof.transactionHash!, "Transaction Hash")}>
+                                  <Copy className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+
+                          {protectionProof.blockNumber && (
+                            <div className="text-sm">
+                              <Label className="text-muted-foreground">Block Number</Label>
+                              <p>{protectionProof.blockNumber.toLocaleString()}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* Tab 4: Verify Document */}
             <TabsContent value="verify" className="space-y-6">
               <div className="max-w-2xl mx-auto">
                 <Card>
