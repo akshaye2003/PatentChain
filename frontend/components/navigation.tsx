@@ -13,7 +13,7 @@ export function Navigation() {
     { href: "/", label: "Home" },
     { href: "/how-it-works", label: "How It Works" },
     { href: "/patent-drafting", label: "Patent Drafting" },
-    { href: "/blockchain-proof", label: "Blockchain Proof" },
+    { href: "/my-patents", label: "My Patents" },
     { href: "/crowdfunding", label: "Crowdfunding" },
     { href: "/about", label: "About" },
   ]

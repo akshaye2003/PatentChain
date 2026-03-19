@@ -1,0 +1,43 @@
+{
+  "name": "patentchain-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PatentChain Blockchain Backend - Hardhat + Solidity",
+  "scripts": {
+    "compile": "hardhat compile",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:crowdfunding": "hardhat run scripts/deploy-crowdfunding.js --network localhost",
+    "deploy:patent-nft": "hardhat run scripts/deploy-patent-nft.js --network localhost",
+    "deploy:all": "npm run deploy:local && npm run deploy:crowdfunding && npm run deploy:patent-nft",
+    "upload:ipfs": "node scripts/upload-to-ipfs.js",
+    "mint:nft": "node scripts/mint-patent-nft.js",
+    "test": "hardhat test",
+    "clean": "hardhat clean"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-ignition": "^0.15.0",
+    "@nomicfoundation/hardhat-ignition-ethers": "^0.15.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "@nomicfoundation/ignition-core": "^0.15.0",
+    "@openzeppelin/contracts": "^4.9.6",
+    "@typechain/ethers-v6": "^0.5.0",
+    "@typechain/hardhat": "^9.0.0",
+    "@types/chai": "^4.2.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22",
+    "chai": "^4.2.0",
+    "dotenv": "^17.2.3",
+    "ethers": "^6.13.0",
+    "hardhat": "^2.22.0",
+    "hardhat-gas-reporter": "^1.0.8",
+    "solidity-coverage": "^0.8.1",
+    "ts-node": "^10.9.2",
+    "typechain": "^8.3.0",
+    "typescript": "^5"
+  }
+}

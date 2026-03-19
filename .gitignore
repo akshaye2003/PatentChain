@@ -1,27 +1,30 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Root .gitignore for PatentChain
 
-# dependencies
-/node_modules
+# Dependencies
+node_modules/
 
-# next.js
-/.next/
-/out/
+# Build outputs
+.next/
+frontend/.next/
+backend/artifacts/
+backend/cache/
 
-# production
-/build
+# Environment files
+.env
+.env.local
 
-# debug
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
 
-# env files
-.env*
-
-# vercel
-.vercel
-
-# typescript
+# TypeScript
 *.tsbuildinfo
-next-env.d.ts
