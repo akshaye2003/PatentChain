@@ -39,8 +39,8 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/blockchain-proof" className="text-muted-foreground hover:text-primary transition-colors">
-                  Blockchain Proof
+                <Link href="/patent-protection" className="text-muted-foreground hover:text-primary transition-colors">
+                  Patent Protection
                 </Link>
               </li>
               <li>

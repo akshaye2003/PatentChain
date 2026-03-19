@@ -51,7 +51,7 @@ export default function PatentDraftingPage() {
       }
 
       const data = await response.json()
-      setPatentDraft(data.draft)
+      setPatentDraft(data.patentDraft ?? data.draft ?? "")
       toast({
         title: "Patent Draft Generated",
         description: "Your AI-powered patent draft is ready for review.",

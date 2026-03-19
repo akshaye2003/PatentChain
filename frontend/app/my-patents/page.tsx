@@ -36,7 +36,10 @@ import {
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import {
+  checkDocumentRegistered,
   connectWallet,
+  getContractAddress,
+  getDocumentInfo,
   getWalletAddress,
   isMetaMaskInstalled,
   mintPatentNFT,
@@ -45,7 +48,6 @@ import {
   getPatentNFTContractAddress,
   getMintFee,
   isPatentMinted,
-  hexToBytes32,
   type PatentNFT,
 } from "@/lib/web3"
 import { uploadToIPFS, validatePatentFile, type IPFSUploadResult } from "@/lib/ipfs"
@@ -170,7 +172,7 @@ export default function MyPatentsPage() {
     }
   }
 
-  const loadOwnedNFTs = async () => {
+  const loadOwnedNFTs = async (silent: boolean = false) => {
     if (!walletAddress) return
 
     setIsLoadingNFTs(true)
@@ -179,23 +181,43 @@ export default function MyPatentsPage() {
       const tokenIds = await getPatentsByOwner(walletAddress, contractAddress)
 
       const nfts: NFTMetadata[] = []
+      let skippedCount = 0
+      
       for (const tokenId of tokenIds) {
         try {
           const patent = await getPatentNFT(tokenId, contractAddress)
-          nfts.push({ tokenId, patent })
+          if (patent) {
+            nfts.push({ tokenId, patent })
+          } else {
+            console.warn(`Token ${tokenId} does not exist (burned)`)
+            skippedCount++
+          }
         } catch (error) {
-          console.error(`Error loading NFT ${tokenId}:`, error)
+          // Token might have been burned or doesn't exist - skip it
+          console.warn(`Skipping NFT ${tokenId}:`, error)
+          skippedCount++
         }
       }
 
       setOwnedNFTs(nfts)
+      
+      // Only show toast if some tokens were skipped and not in silent mode
+      if (skippedCount > 0 && !silent) {
+        toast({
+          title: "Some NFTs Skipped",
+          description: `${skippedCount} token(s) could not be loaded (may have been burned).`,
+          variant: "default",
+        })
+      }
     } catch (error) {
       console.error("Error loading NFTs:", error)
-      toast({
-        title: "Failed to Load NFTs",
-        description: error instanceof Error ? error.message : "Could not load your NFTs",
-        variant: "destructive",
-      })
+      if (!silent) {
+        toast({
+          title: "Failed to Load NFTs",
+          description: error instanceof Error ? error.message : "Could not load your NFTs",
+          variant: "destructive",
+          })
+      }
     } finally {
       setIsLoadingNFTs(false)
     }
@@ -355,7 +377,7 @@ export default function MyPatentsPage() {
         return
       }
 
-      const txHash = await mintPatentNFT(
+      const result = await mintPatentNFT(
         fileHash,
         mintForm.ipfsHash,
         mintForm.title,
@@ -367,7 +389,7 @@ export default function MyPatentsPage() {
 
       toast({
         title: "NFT Minted Successfully",
-        description: `Transaction: ${txHash.slice(0, 10)}...`,
+        description: `Transaction: ${result.txHash.slice(0, 10)}...`,
       })
 
       // Reset form
@@ -380,7 +402,7 @@ export default function MyPatentsPage() {
         isTransferable: true,
       })
 
-      await loadOwnedNFTs()
+      await loadOwnedNFTs(true) // silent mode - don't show errors for burned tokens
     } catch (error) {
       console.error("Error minting NFT:", error)
       toast({
@@ -419,19 +441,40 @@ export default function MyPatentsPage() {
       const hashArray = Array.from(new Uint8Array(hashBuffer))
       const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
 
-      // Mock verification - in production, check blockchain
+      const registryAddress = getContractAddress()
+      const isRegistered = await checkDocumentRegistered(hashHex, registryAddress)
+
+      if (!isRegistered) {
+        setDocumentProof({
+          fileName: verifyFile.name,
+          fileSize: verifyFile.size,
+          fileHash: hashHex,
+          timestamp: new Date().toISOString(),
+          status: "failed",
+        })
+        toast({
+          title: "Document Not Found",
+          description: "This file hash is not registered on the PatentRegistry contract.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const documentInfo = await getDocumentInfo(hashHex, registryAddress)
       const proof: DocumentProof = {
         fileName: verifyFile.name,
         fileSize: verifyFile.size,
         fileHash: hashHex,
-        timestamp: new Date().toISOString(),
+        timestamp: new Date(Number(documentInfo.timestamp) * 1000).toISOString(),
+        transactionHash: undefined,
+        blockNumber: Number(documentInfo.blockNumber),
         status: "confirmed",
       }
 
       setDocumentProof(proof)
       toast({
         title: "Document Verified",
-        description: "Document hash has been verified.",
+        description: `Registered to ${documentInfo.owner.slice(0, 6)}...${documentInfo.owner.slice(-4)}.`,
       })
     } catch (error) {
       console.error("Error verifying document:", error)
@@ -667,8 +710,8 @@ export default function MyPatentsPage() {
                             <CardTitle className="text-lg">{nft.patent.title}</CardTitle>
                             <CardDescription>Token ID: {nft.tokenId.toString()}</CardDescription>
                           </div>
-                          <Badge variant={nft.patent.transferable ? "default" : "secondary"}>
-                            {nft.patent.transferable ? "Transferable" : "Non-Transferable"}
+                          <Badge variant={nft.patent.isTransferable ? "default" : "secondary"}>
+                            {nft.patent.isTransferable ? "Transferable" : "Non-Transferable"}
                           </Badge>
                         </div>
                       </CardHeader>
@@ -686,7 +729,7 @@ export default function MyPatentsPage() {
                           </div>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground">Minted:</span>
-                            <span>{formatDate(nft.patent.mintTimestamp)}</span>
+                            <span>{formatDate(nft.patent.mintDate)}</span>
                           </div>
                         </div>
 
@@ -940,10 +983,22 @@ export default function MyPatentsPage() {
                     {documentProof && (
                       <div className="space-y-4">
                         <Separator />
-                        <div className="p-4 bg-primary/5 rounded-lg border border-primary/20 space-y-3">
+                        <div
+                          className={`rounded-lg border p-4 space-y-3 ${
+                            documentProof.status === "confirmed"
+                              ? "bg-primary/5 border-primary/20"
+                              : "bg-destructive/5 border-destructive/20"
+                          }`}
+                        >
                           <div className="flex items-center gap-2">
-                            <CheckCircle className="h-5 w-5 text-primary" />
-                            <span className="font-medium">Verification Complete</span>
+                            <CheckCircle
+                              className={`h-5 w-5 ${
+                                documentProof.status === "confirmed" ? "text-primary" : "text-destructive"
+                              }`}
+                            />
+                            <span className="font-medium">
+                              {documentProof.status === "confirmed" ? "Verification Complete" : "Not Registered"}
+                            </span>
                           </div>
                           
                           <div className="space-y-2 text-sm">
@@ -959,6 +1014,12 @@ export default function MyPatentsPage() {
                               <span className="text-muted-foreground">Timestamp:</span>
                               <span>{new Date(documentProof.timestamp).toLocaleString()}</span>
                             </div>
+                            {documentProof.blockNumber && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Block:</span>
+                                <span>{documentProof.blockNumber.toLocaleString()}</span>
+                              </div>
+                            )}
                           </div>
 
                           <div className="pt-2">

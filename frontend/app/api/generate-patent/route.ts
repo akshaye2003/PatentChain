@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
     return NextResponse.json({
+      draft: mockPatentDraft,
       patentDraft: mockPatentDraft,
       success: true,
     })

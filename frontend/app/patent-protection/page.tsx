@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { Navigation } from "@/components/navigation"
 import { Footer } from "@/components/footer"
 import { Button } from "@/components/ui/button"
@@ -31,7 +31,6 @@ import {
   isMetaMaskInstalled,
   registerDocument,
   getContractAddress,
-  hexToBytes32,
 } from "@/lib/web3"
 
 interface DocumentProof {
@@ -52,6 +51,10 @@ export default function PatentProtectionPage() {
   const [walletConnected, setWalletConnected] = useState(false)
   const [walletAddress, setWalletAddress] = useState("")
   const [isConnecting, setIsConnecting] = useState(false)
+
+  useEffect(() => {
+    checkWalletConnection()
+  }, [])
 
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -163,8 +166,7 @@ export default function PatentProtectionPage() {
       const result = await registerDocument(
         documentProof.fileHash,
         documentProof.fileName,
-        contractAddress,
-        "localhost"
+        contractAddress
       )
 
       setDocumentProof((prev) =>
